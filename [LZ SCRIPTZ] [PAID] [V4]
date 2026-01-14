@@ -1,0 +1,191 @@
+--// SERVICES
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+
+--// PLAYER
+local player = Players.LocalPlayer
+local gui = player:WaitForChild("PlayerGui")
+
+-- REMOVE OLD UI
+if gui:FindFirstChild("LZ_UI") then
+	gui.LZ_UI:Destroy()
+end
+
+------------------------------------------------
+-- VARIABLES
+------------------------------------------------
+local character, humanoid, rootPart
+local spawnCFrame
+
+local lzBoost = false
+local floatEnabled = false
+local instantSteal = false
+
+local BOOST_SPEED = 28.5
+local FLOAT_HEIGHT = 4
+local FLOAT_SPEED = 0.08
+local INSTANT_SPEED = 10 -- SAFE SPEED
+
+------------------------------------------------
+-- CHARACTER SETUP
+------------------------------------------------
+local function setupCharacter(char)
+	character = char
+	humanoid = char:WaitForChild("Humanoid")
+	rootPart = char:WaitForChild("HumanoidRootPart")
+
+	if not spawnCFrame then
+		spawnCFrame = rootPart.CFrame
+	end
+end
+
+if player.Character then
+	setupCharacter(player.Character)
+end
+player.CharacterAdded:Connect(setupCharacter)
+
+------------------------------------------------
+-- UI
+------------------------------------------------
+local screenGui = Instance.new("ScreenGui", gui)
+screenGui.Name = "LZ_UI"
+screenGui.ResetOnSpawn = false
+
+local frame = Instance.new("Frame", screenGui)
+frame.Size = UDim2.new(0, 230, 0, 260)
+frame.Position = UDim2.new(0.5, -115, 0.5, -130)
+frame.BackgroundColor3 = Color3.fromRGB(0,0,0)
+frame.BorderSizePixel = 0
+frame.Active = true
+Instance.new("UICorner", frame).CornerRadius = UDim.new(0,12)
+
+-- BORDER
+local stroke = Instance.new("UIStroke", frame)
+stroke.Color = Color3.fromRGB(120,180,255)
+stroke.Thickness = 3
+
+------------------------------------------------
+-- TOP BAR (DRAG ONLY)
+------------------------------------------------
+local topBar = Instance.new("Frame", frame)
+topBar.Size = UDim2.new(1,0,0,30)
+topBar.BackgroundTransparency = 1
+topBar.Active = true
+
+local title = Instance.new("TextLabel", topBar)
+title.Size = UDim2.new(1,0,1,0)
+title.BackgroundTransparency = 1
+title.Text = "[LZ-PAID]"
+title.Font = Enum.Font.GothamBlack
+title.TextSize = 16
+title.TextColor3 = Color3.fromRGB(120,180,255)
+
+-- DRAG LOGIC
+do
+	local dragging, dragStart, startPos
+
+	topBar.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			dragging = true
+			dragStart = input.Position
+			startPos = frame.Position
+		end
+	end)
+
+	UserInputService.InputChanged:Connect(function(input)
+		if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+			local delta = input.Position - dragStart
+			frame.Position = UDim2.new(
+				startPos.X.Scale, startPos.X.Offset + delta.X,
+				startPos.Y.Scale, startPos.Y.Offset + delta.Y
+			)
+		end
+	end)
+
+	UserInputService.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			dragging = false
+		end
+	end)
+end
+
+------------------------------------------------
+-- BUTTON CREATOR
+------------------------------------------------
+local DARK = Color3.fromRGB(40,40,40)
+local BLUE = Color3.fromRGB(120,180,255)
+
+local function makeButton(text, y)
+	local b = Instance.new("TextButton", frame)
+	b.Size = UDim2.new(1,-20,0,36)
+	b.Position = UDim2.new(0,10,0,y)
+	b.Text = text
+	b.Font = Enum.Font.GothamBlack
+	b.TextSize = 15
+	b.BackgroundColor3 = DARK
+	b.TextColor3 = Color3.new(1,1,1)
+	b.BorderSizePixel = 0
+	Instance.new("UICorner", b).CornerRadius = UDim.new(0,8)
+	return b
+end
+
+------------------------------------------------
+-- BUTTONS (NORMAL LAYOUT)
+------------------------------------------------
+local boostBtn   = makeButton("LZ BOOST", 40)
+local floatBtn   = makeButton("FLOAT TO BASE", 86)
+local instantBtn = makeButton("LZ INSTANT STEAL", 132)
+local kickBtn    = makeButton("KICK FROM SERVER", 178)
+
+------------------------------------------------
+-- BUTTON LOGIC
+------------------------------------------------
+boostBtn.MouseButton1Click:Connect(function()
+	lzBoost = not lzBoost
+	boostBtn.BackgroundColor3 = lzBoost and BLUE or DARK
+	boostBtn.TextColor3 = lzBoost and Color3.new(0,0,0) or Color3.new(1,1,1)
+end)
+
+floatBtn.MouseButton1Click:Connect(function()
+	floatEnabled = not floatEnabled
+	floatBtn.BackgroundColor3 = floatEnabled and BLUE or DARK
+	floatBtn.TextColor3 = floatEnabled and Color3.new(0,0,0) or Color3.new(1,1,1)
+end)
+
+instantBtn.MouseButton1Click:Connect(function()
+	instantSteal = not instantSteal
+	instantBtn.BackgroundColor3 = instantSteal and BLUE or DARK
+	instantBtn.TextColor3 = instantSteal and Color3.new(0,0,0) or Color3.new(1,1,1)
+end)
+
+kickBtn.MouseButton1Click:Connect(function()
+	player:Kick("LZ KICKED YOU")
+end)
+
+------------------------------------------------
+-- MOVEMENT
+------------------------------------------------
+RunService.Heartbeat:Connect(function(dt)
+	if humanoid then
+		humanoid.WalkSpeed = lzBoost and BOOST_SPEED or 16
+	end
+
+	if not rootPart or not spawnCFrame then return end
+
+	-- FLOAT
+	if floatEnabled then
+		local target = spawnCFrame.Position + Vector3.new(0, FLOAT_HEIGHT, 0)
+		rootPart.CFrame = rootPart.CFrame:Lerp(CFrame.new(target), FLOAT_SPEED)
+	end
+
+	-- SAFE INSTANT STEAL
+	if instantSteal then
+		local dir = spawnCFrame.Position - rootPart.Position
+		if dir.Magnitude > 1 then
+			local step = dir.Unit * math.min(INSTANT_SPEED * dt, dir.Magnitude)
+			rootPart.CFrame = CFrame.new(rootPart.Position + step)
+		end
+	end
+end)
